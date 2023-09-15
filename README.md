@@ -1,2 +1,2 @@
 # apim-publisher
-Build and publish apim publisher docker image
+Build and publish Azure APIM publisher docker image
