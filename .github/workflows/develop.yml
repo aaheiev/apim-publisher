@@ -1,36 +1,40 @@
-# This is a basic workflow to help you get started with Actions
+name: Develop
 
-name: CI
-
-# Controls when the workflow will run
 on:
   # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+    branches:
+      - dev
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
+    name: Build
     runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
+    env:
+      IMAGE_URL: ${{ vars.ACR_NAME }}.azurecr.io/${{ vars.CONTAINER_IMAGE_NAME }}
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CI }}
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: Login ACR
+        run: az acr login --name ${{ vars.ACR_NAME }}
+
+      - name: Config
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          APIM_VERSION=$(cat APIM_VERSION)
+          VERSION=$(echo $APIM_VERSION | sed -e 's/^v//')
+          VERSION="${VERSION}-${{ github.run_number }}"
+          echo "VERSION=$(echo $VERSION)" >> $GITHUB_ENV
+          echo "APIM_VERSION=$(echo $APIM_VERSION)" >> $GITHUB_ENV
+
+      - name: Build image
+        run: |
+          docker build --platform linux/amd64 \
+            --build-arg APIM_VERSION=${{ env.APIM_VERSION }} \
+            -t ${{ env.IMAGE_URL }}:${{ env.VERSION }} .
+
+      - name: Publish image
+        run: docker push ${{ env.IMAGE_URL }}:${{ env.VERSION }}
